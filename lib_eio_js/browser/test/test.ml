@@ -108,13 +108,10 @@ end
 
 let () =
   init ();
-  let main =
-    Eio_browser.run @@ fun () ->
-    try Alcotest.run ~and_exit:false "eio" [
-        "fibers", Eio_test.Fibers.tests;
-        "stream", Eio_test.Stream.tests;
-        "promises", Eio_test.Promises.tests;
-        "browser", Browser_tests.tests
-      ] with Exit -> ()
-  in
-  Fut.await main (fun () -> ())
+  Eio_browser.async @@ fun () ->
+  try Alcotest.run ~and_exit:false "eio" [
+      "fibers", Eio_test.Fibers.tests;
+      "stream", Eio_test.Stream.tests;
+      "promises", Eio_test.Promises.tests;
+      "browser", Browser_tests.tests
+    ] with Exit -> ()

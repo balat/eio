@@ -195,16 +195,8 @@ let next_event : 'a Brr.Ev.type' -> Brr.Ev.target -> 'a Brr.Ev.t = fun typ targe
 (* Callback stream for event listeners that wish to perform effects *)
 let callback_stream = Eio.Stream.create max_int
 
-let run_callbacks () =
-  let rec aux sw =
-    let callback = Eio.Stream.take callback_stream in
-    Eio.Fiber.fork ~sw callback;
-    aux sw
-  in
-  Eio.Switch.run aux
-
 (* Largely based on the Eio_mock.Backend event loop. *)
-let run main =
+let run () =
   let run_q = Run_queue.create () in
   let scheduler = Scheduler.v run_q in
   Run_queue.push run_q IO;
@@ -246,24 +238,23 @@ let run main =
           | _ -> None
       }
   in
-  let new_fiber = Fiber_context.make_root () in
-  let result, r = Fut.create () in
-  let Suspend = fork ~new_fiber (fun () ->
-    let run () =
-      let p, r = Eio.Promise.create () in
-      Eio.Fiber.both
-        (fun () -> Eio.Promise.resolve r (main ()))
-        run_callbacks;
-      Eio.Promise.await p
+  let run_callbacks () =
+    let rec aux sw =
+      let callback = Eio.Stream.take callback_stream in
+      Eio.Fiber.fork ~sw callback;
+    aux sw
     in
-    r (run ())
-  ) in
-  result
+    Eio.Switch.run aux
+  in
+  let new_fiber = Fiber_context.make_root () in
+  let Suspend = fork ~new_fiber run_callbacks in
+  ()
 
 let listen ?opts ev fn el =
   let f e = Eio.Stream.add callback_stream (fun () -> fn e) in
   Ev.listen ?opts ev f el
 
-let wrap_callback callback e =
-  Eio.Stream.add callback_stream (fun () -> callback e);
-  Js_of_ocaml.Js._false
+let async f =
+  Eio.Stream.add callback_stream (fun () -> f ())
+
+let _ = run ()
